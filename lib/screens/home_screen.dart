@@ -1213,38 +1213,393 @@ class _MapPageState extends State<_MapPage> {
     );
   }
 
-  List<Marker> _customerMarkers(List<TaskItem> located) {
-    return located.asMap().entries.map((entry) {
-      final task = entry.value;
-      final isCash = task.paymentKind == PaymentKind.cashOnDelivery;
-      return Marker(
-        point: LatLng(_effectiveLocation(task)!.latitude,
-            _effectiveLocation(task)!.longitude),
-        width: 48,
-        height: 48,
-        alignment: Alignment.topCenter,
-        child: Tooltip(
-          message: task.storeName.isNotEmpty
-              ? task.storeName
-              : task.displayReference,
-          child: GestureDetector(
-            onTap: () => _showTask(task),
-            child: Icon(
-              Icons.location_pin,
-              size: 46,
-              color: _contactData['${task.referenceNumber}_${task.id}']?.status == 'answered'
-                  ? Colors.green
-                  : (_contactData['${task.referenceNumber}_${task.id}']?.status == 'no_answer'
-                      ? Colors.red
-                      : (_corrections.containsKey(_correctionKey(task))
-                          ? Colors.purple
-                          : (isCash ? Colors.orange : Colors.blue))),
-              shadows: const [Shadow(blurRadius: 3, color: Colors.black45)],
+  void _showClusterTasksSheet(List<TaskItem> clusterTasks) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: FractionallySizedBox(
+          heightFactor: clusterTasks.length > 3 ? 0.75 : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'الشحنات المجمعة في هذا الموقع (${clusterTasks.length})',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0D47A1),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: clusterTasks.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final task = clusterTasks[index];
+                      final isCash = task.paymentKind == PaymentKind.cashOnDelivery;
+                      final contact = _contactData['${task.referenceNumber}_${task.id}'];
+                      final isAnswered = contact?.status == 'answered';
+                      final isNoAnswer = contact?.status == 'no_answer';
+
+                      return InkWell(
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _showTaskSheet(task);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: isAnswered
+                                      ? Colors.green
+                                      : (isNoAnswer ? Colors.red : (isCash ? Colors.orange : Colors.blue)),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      task.customerName.isNotEmpty
+                                          ? task.customerName
+                                          : 'عميل غير محدد',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'المتجر: ${task.storeName.isNotEmpty ? task.storeName : "متجر"} | شحنة: ${task.displayReference}',
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                isCash
+                                    ? '💵 ${(task.codAmount ?? 0).toStringAsFixed(0)} ريال'
+                                    : '✓ مدفوع',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: isCash ? const Color(0xFFE65100) : const Color(0xFF1565C0),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
+  }
+
+  void _showTaskSheet(TaskItem task) {
+    final isCash = task.paymentKind == PaymentKind.cashOnDelivery;
+    final contact = _contactData['${task.referenceNumber}_${task.id}'];
+    final isAnswered = contact?.status == 'answered';
+    final isNoAnswer = contact?.status == 'no_answer';
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row: Reference & Badges
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          task.displayReference,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0),
+                          ),
+                        ),
+                        Text(
+                          'المتجر: ${task.storeName.isNotEmpty ? task.storeName : "غير محدد"}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isCash
+                              ? Colors.orange.withValues(alpha: 0.15)
+                              : Colors.blue.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isCash
+                              ? '💵 كاش: ${(task.codAmount ?? 0).toStringAsFixed(0)} ريال'
+                              : '✓ مدفوع',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isCash ? const Color(0xFFE65100) : const Color(0xFF1565C0),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Divider(),
+              // Customer Details
+              Text(
+                'العميل: ${task.customerName.isNotEmpty ? task.customerName : "غير محدد"}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              if (task.customerPhone.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'الهاتف: ${task.customerPhone}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                ),
+              ],
+              if (task.address.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'العنوان: ${task.address}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                ),
+              ],
+              const SizedBox(height: 12),
+              // Action Buttons Row: Call, WhatsApp, Navigation, Status Details
+              Row(
+                children: [
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.phone),
+                    tooltip: 'اتصال',
+                    onPressed: task.customerPhone.isEmpty
+                        ? null
+                        : () async {
+                            final changed = await PhoneActionService.call(
+                              task: task,
+                              context: context,
+                              controller: widget.contactController,
+                            );
+                            if (changed) _loadMapContactData();
+                          },
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    tooltip: 'واتساب',
+                    style: IconButton.styleFrom(
+                      foregroundColor: const Color(0xFF2E7D32),
+                      backgroundColor: Colors.green.withValues(alpha: 0.15),
+                    ),
+                    onPressed: task.customerPhone.isEmpty
+                        ? null
+                        : () async {
+                            final changed = await WhatsAppActionService.open(
+                              task: task,
+                              context: context,
+                              controller: widget.contactController,
+                            );
+                            if (changed) _loadMapContactData();
+                          },
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.navigation_outlined),
+                    tooltip: 'ملاحة',
+                    style: IconButton.styleFrom(
+                      foregroundColor: const Color(0xFF1565C0),
+                      backgroundColor: Colors.blue.withValues(alpha: 0.15),
+                    ),
+                    onPressed: () => _openTask(task),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _showTask(task);
+                    },
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('تفاصيل وتحديث'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _customerMarkers(List<TaskItem> located) {
+    // Cluster tasks by rounded coordinates (~10 meters precision)
+    final clusters = <String, List<TaskItem>>{};
+    for (final task in located) {
+      final loc = _effectiveLocation(task)!;
+      final key = '${loc.latitude.toStringAsFixed(4)}_${loc.longitude.toStringAsFixed(4)}';
+      clusters.putIfAbsent(key, () => []).add(task);
+    }
+
+    final markers = <Marker>[];
+
+    for (final entry in clusters.entries) {
+      final groupTasks = entry.value;
+      final firstTask = groupTasks.first;
+      final loc = _effectiveLocation(firstTask)!;
+
+      if (groupTasks.length == 1) {
+        final task = firstTask;
+        final isCash = task.paymentKind == PaymentKind.cashOnDelivery;
+        final contact = _contactData['${task.referenceNumber}_${task.id}'];
+        final isAnswered = contact?.status == 'answered';
+        final isNoAnswer = contact?.status == 'no_answer';
+
+        final pinColor = isAnswered
+            ? const Color(0xFF2E7D32)
+            : (isNoAnswer
+                ? const Color(0xFFC62828)
+                : (_corrections.containsKey(_correctionKey(task))
+                    ? Colors.purple
+                    : (isCash ? const Color(0xFFE65100) : const Color(0xFF1565C0))));
+
+        markers.add(
+          Marker(
+            point: LatLng(loc.latitude, loc.longitude),
+            width: 38,
+            height: 46,
+            alignment: Alignment.topCenter,
+            child: GestureDetector(
+              onTap: () => _showTaskSheet(task),
+              child: Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  Icon(
+                    Icons.location_pin,
+                    size: 44,
+                    color: pinColor,
+                    shadows: const [Shadow(blurRadius: 4, color: Colors.black38)],
+                  ),
+                  Positioned(
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: Text(
+                        isCash ? '💵' : '✓',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      } else {
+        // Multi-task Cluster Marker
+        markers.add(
+          Marker(
+            point: LatLng(loc.latitude, loc.longitude),
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            child: GestureDetector(
+              onTap: () => _showClusterTasksSheet(groupTasks),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF0D47A1),
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 6, spreadRadius: 1),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${groupTasks.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    return markers;
   }
 
   Marker? _userMarker() {
@@ -1270,8 +1625,8 @@ class _MapPageState extends State<_MapPage> {
           padding: const EdgeInsets.all(5),
           child: const Icon(
             Icons.navigation,
-            color: Colors.blue,
-            size: 30,
+            color: Color(0xFF1976D2),
+            size: 28,
           ),
         ),
       ),

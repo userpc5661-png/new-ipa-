@@ -299,6 +299,7 @@ class _ShipmentStatusScreenState extends State<ShipmentStatusScreen> {
       options = merged.values.toList();
     }
 
+    // 4. If no options returned from server, display error message without hardcoded fallbacks
     if (!mounted) return;
 
     options.sort((a, b) {
@@ -313,7 +314,7 @@ class _ShipmentStatusScreenState extends State<ShipmentStatusScreen> {
       _selected = options.isEmpty ? null : options.first;
       _loading = false;
       if (options.isEmpty) {
-        _error = 'لا توجد حالات متاحة لهذه الشحنة حاليًا في نظام SLS.';
+        _error = 'لا توجد حالات متاحة لهذه الشحنة حالياً';
       }
     });
   }
@@ -677,30 +678,60 @@ class _ShipmentStatusScreenState extends State<ShipmentStatusScreen> {
       debugPrint('bulk/status HTTP status: 200');
       debugPrint('bulk/status response success: true');
 
-      // The official tasks list may remove a shipment immediately after a
-      // successful terminal update. Absence after HTTP success is therefore a
-      // valid server confirmation, not an error.
-      debugPrint('SLS: Update accepted. Refreshing server state...');
-      final tasks = await _mainApi.fetchTasks(widget.savedSession);
-      TaskItem? refreshed;
-      for (final item in tasks) {
-        if (item.id == widget.task.id ||
-            item.referenceNumber == widget.task.referenceNumber ||
-            item.referenceNumber == awb) {
-          refreshed = item;
-          break;
-        }
-      }
-
-      _verifiedStatusOnServer = refreshed == null
-          ? 'Shipment removed from active tasks after update'
-          : '${refreshed.statusCode} ${refreshed.statusLabel}';
-
-      if (delivered && refreshed != null &&
-          refreshed.progress != TaskProgress.completed) {
+      // 1. Re-query directly using GET /api/mobile/orders/awb/{actualAwb} for strict server verification
+      debugPrint('SLS: Re-querying shipment status via GET /api/mobile/orders/awb/$awb...');
+      ScannedShipment verifiedShipment;
+      try {
+        verifiedShipment = await _api.scanOrder(awb);
+      } catch (error) {
+        debugPrint('SLS: Direct verification GET failed: $error');
         throw ScanApiException(
-            'استلم السيرفر الطلب، لكن الحالة الظاهرة ما زالت: ${refreshed.statusLabel}');
+          'Update not verified: تعذر التحقق من حالة الشحنة من السيرفر ($error)',
+        );
       }
+
+      final serverStatus = verifiedShipment.statusCode.trim();
+      final serverStatusLabel = verifiedShipment.statusLabelCode.trim();
+      final serverStatusText = verifiedShipment.statusText.trim();
+      debugPrint(
+        'SLS: Direct verification response - status: $serverStatus, '
+        'status_label: $serverStatusLabel, text: $serverStatusText',
+      );
+
+      final sentStatusStr = statusId.toString().trim();
+      final sentLabelStr = officialStatusLabel.trim().toLowerCase();
+      final sentLabelIdStr = labelId?.toString().trim() ?? '';
+
+      bool matches = false;
+      if (delivered) {
+        matches = serverStatus == sentStatusStr ||
+            serverStatus == '3' ||
+            serverStatusText.toLowerCase().contains('deliver') ||
+            serverStatusText.contains('تسليم') ||
+            serverStatusText.contains('توصيل');
+      } else {
+        matches = serverStatus == sentStatusStr ||
+            (sentLabelIdStr.isNotEmpty && serverStatusLabel == sentLabelIdStr) ||
+            serverStatusText.toLowerCase().contains(sentLabelStr) ||
+            serverStatusLabel.toLowerCase().contains(sentLabelStr);
+      }
+
+      if (!matches) {
+        debugPrint(
+          'SLS: Status mismatch - sent: $statusId ($officialStatusLabel), '
+          'server returned: $serverStatus ($serverStatusText)',
+        );
+        throw ScanApiException(
+          'Update not verified: الحالة المسجلة على السيرفر هي "$serverStatusText" ولا تطابق الحالة المطلوبة.',
+        );
+      }
+
+      _verifiedStatusOnServer = '$serverStatus ($serverStatusText)';
+
+      // 2. Fetch tasks list to synchronize task state
+      try {
+        await _mainApi.fetchTasks(widget.savedSession);
+      } catch (_) {}
 
       if (needsAddress) {
         await _api.addPickupLocation(
