@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sls_green_primary">#2E7D32</color>
+    <color name="sls_green_dark">#00C853</color>
+    <color name="sls_background_dark">#121212</color>
+    <color name="sls_surface_dark">#1E1E1E</color>
+</resources>

@@ -1,0 +1,8 @@
+{
+  "name": "SLS Assistant Pro",
+  "description": "Smart Android delivery captain assistant for SLS Express featuring task management, barcode scanning, navigation, and collection tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

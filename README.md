@@ -1,11 +1,13 @@
-<div align="center">
+# SLS Assistant Pro
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Flutter companion application for SLS drivers with a dashboard, searchable and filterable tasks, a customer map, and the existing scanner workflow.
 
-  <h1>Built with AI Studio</h2>
+## Run
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+```bash
+flutter pub get
+flutter test
+flutter run
+```
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+See `README_AR.md` and `CHANGELOG_ASSISTANT.md` for the implemented changes and testing notes.
