@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:sls_assistant_pro/services/api_service.dart';
+import '../models/scan_models.dart';
 import '../models/task_item.dart';
 import '../services/developer_diagnostics_service.dart';
 import '../services/delivery_history_store.dart';

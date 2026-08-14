@@ -10,6 +10,8 @@ import '../services/api_service.dart';
 import '../services/navigation_service.dart';
 import '../services/location_correction_service.dart';
 import '../services/token_store.dart';
+import '../services/phone_action_service.dart';
+import '../services/whatsapp_action_service.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/task_card.dart';
 import '../services/local_contact_controller.dart';
@@ -1440,12 +1442,59 @@ class _MapPageState extends State<_MapPage> {
                     onPressed: task.customerPhone.isEmpty
                         ? null
                         : () async {
-                            final changed = await PhoneActionService.call(
-                              task: task,
-                              context: context,
-                              controller: widget.contactController,
-                            );
-                            if (changed) _loadMapContactData();
+                            final storageKey = '${task.referenceNumber}_${task.id}';
+                            final opened = widget.contactController != null
+                                ? await widget.contactController!.handleCall(storageKey, task.customerPhone)
+                                : await PhoneActionService.call(task.customerPhone);
+                            if (!context.mounted) return;
+                            if (!opened) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('رقم الهاتف غير صالح أو تعذر فتح الاتصال')),
+                              );
+                              return;
+                            }
+                            if (widget.contactController != null) {
+                              final outcome = await showModalBottomSheet<String>(
+                                context: context,
+                                isScrollControlled: true,
+                                showDragHandle: true,
+                                builder: (sheetContext) => SafeArea(
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('نتيجة الاتصال', style: Theme.of(sheetContext).textTheme.titleLarge),
+                                        const SizedBox(height: 8),
+                                        const Text('هل أجاب العميل؟'),
+                                        const SizedBox(height: 18),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: OutlinedButton(
+                                                onPressed: () => Navigator.pop(sheetContext, 'no_answer'),
+                                                child: const Text('لم يجيب', style: TextStyle(color: Colors.red)),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: FilledButton(
+                                                onPressed: () => Navigator.pop(sheetContext, 'answered'),
+                                                child: const Text('أجاب العميل'),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                              if (outcome != null) {
+                                await widget.contactController!.setOutcome(storageKey, outcome);
+                                _loadMapContactData();
+                              }
+                            }
                           },
                   ),
                   const SizedBox(width: 8),
@@ -1459,12 +1508,19 @@ class _MapPageState extends State<_MapPage> {
                     onPressed: task.customerPhone.isEmpty
                         ? null
                         : () async {
-                            final changed = await WhatsAppActionService.open(
-                              task: task,
-                              context: context,
-                              controller: widget.contactController,
-                            );
-                            if (changed) _loadMapContactData();
+                            final result = await WhatsAppActionService.openForTask(task);
+                            if (!context.mounted) return;
+                            if (!result.success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(result.message ?? 'تعذر فتح واتساب')),
+                              );
+                              return;
+                            }
+                            if (widget.contactController != null) {
+                              final storageKey = '${task.referenceNumber}_${task.id}';
+                              await widget.contactController!.setOutcome(storageKey, 'answered', type: 'whatsapp');
+                              _loadMapContactData();
+                            }
                           },
                   ),
                   const SizedBox(width: 8),
