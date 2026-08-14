@@ -32,15 +32,36 @@ text = text.replace(
 )
 podfile.write_text(text, encoding="utf-8", newline="\n")
 print("Podfile deployment target set to 15.5")
+
+# Create ios/Flutter directory if missing
+flutter_dir = Path("ios/Flutter")
+flutter_dir.mkdir(parents=True, exist_ok=True)
+
+# Re-create Release.xcconfig required by Xcode
+release_xcconfig = flutter_dir / "Release.xcconfig"
+
+release_xcconfig.write_text(
+    '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"\n'
+    '#include "Generated.xcconfig"\n',
+    encoding="utf-8",
+    newline="\n",
+)
+
+print("Created ios/Flutter/Release.xcconfig")
 PY
 
 echo "=== Installing CocoaPods ==="
 cd ios
-rm -rf Pods Podfile.lock
+
+rm -rf Pods
+rm -f Podfile.lock
+
 pod install --repo-update
+
 cd ..
 
 echo "=== Building unsigned Runner.app with Xcode ==="
+
 rm -rf build/ios/DerivedData
 rm -rf build/ios/ipa
 
@@ -58,24 +79,36 @@ xcodebuild \
   clean build
 
 echo "=== Locating Runner.app ==="
+
 APP_PATH="$(find build/ios/DerivedData/Build/Products/Release-iphoneos \
-  -maxdepth 1 -type d -name '*.app' | head -n 1)"
+  -maxdepth 1 \
+  -type d \
+  -name '*.app' \
+  | head -n 1)"
 
 if [ -z "${APP_PATH}" ] || [ ! -d "${APP_PATH}" ]; then
   echo "ERROR: Runner.app was not found."
+
+  echo "Available .app files:"
   find build/ios/DerivedData -type d -name "*.app" || true
+
   exit 1
 fi
 
 echo "Found app: ${APP_PATH}"
 
 echo "=== Creating unsigned IPA ==="
+
 mkdir -p build/ios/ipa/Payload
+
 cp -R "${APP_PATH}" build/ios/ipa/Payload/Runner.app
 
 cd build/ios/ipa
+
 /usr/bin/zip -qry SLS_Assistant.ipa Payload
+
 rm -rf Payload
 
 echo "=== IPA created successfully ==="
+
 ls -lh SLS_Assistant.ipa
